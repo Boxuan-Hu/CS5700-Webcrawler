@@ -33,7 +33,20 @@ class FakebookHTMLParser(HTMLParser):
 
     - look for the csrfmiddlewaretoken, and process it.
     """
-    
+
+    def __init__(self):
+        super().__init__()
+        self.csrfmiddleware_token = None        
+
+    #?
+    def handle_starttag(self, tag, attrs):
+        if tag == "input":
+            for attr in attrs:
+                if attr[0] == "name":
+                    if attr[1] == "csrfmiddlewaretoken":
+                        for attr in attrs:
+                            if attr[0] == "value":
+                                self.csrfmiddleware_token = attr[1]
 
     
 #Parses the command line arguments for username and password. Throws error for invalid info
@@ -82,9 +95,11 @@ def send_get_request(path, sock, host, cookie1=None, cookie2=None):
     cookie_header = ""         
     if (cookie1 != None):
         cookie_header += 'Cookie: csrftoken=' + cookie1
-        if (cookie1 != None):
-            cookie_header += "; " + 'sessionid=' + cookie1        
+        if (cookie2 != None):
+            cookie_header += "; " + 'sessionid=' + cookie2
+        headers.append(cookie_header)        
     request = CRLF.join(headers) + CRLF + CRLF
+    print("request: " + request)
     sock.send(request.encode())
 
 # this function will help you to receive message from the server for any request sent by the client
@@ -126,10 +141,21 @@ def cookie_jar(msg):
     return cookies
     
     """
+    msg = msg.decode()
+    header_end = msg.rfind(CRLF + CRLF)
+    headers = msg[:header_end].split(CRLF)
+
+    session_cookie = None
+    csrf_cookie = None
+
+    for header in headers:
+        if header.startswith("Set-Cookie: sessionid"):
+            session_cookie = header.split(';')[0].split('=')[1].strip()
+        if header.startswith("Set-Cookie: csrftoken"):
+            csrf_cookie = header.split(';')[0].split('=')[1].strip()
+            
+    return session_cookie, csrf_cookie
     
-
-
-
 
 #this function will help you to send the  request to login
 def login_user(sock, path, host, body_len, body, cookie1, cookie2):
@@ -145,10 +171,6 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
     secret flags are found for the user.
     Also accounts for and appropriately handles different errors received when parsing through pages.
     """
-    
-
-
-
 
 def main():
     host = "Host: project2.5700.network"
@@ -167,41 +189,52 @@ def main():
     send_get_request(root_path, wrapped_socket, host)
 
     # check the received message
-    received_message = receive_msg(wrapped_socket)
-    print(received_message.decode())
+    received_message_root_page = receive_msg(wrapped_socket)
 
     # store session cookie
-    
+    session_cookie, csrf_cookie = cookie_jar(received_message_root_page)
 
     # send get request for login page
-   
+    send_get_request(login_path, wrapped_socket, host)
 
     # check message for login page
-    
+    received_message_login_page = receive_msg(wrapped_socket)
 
     # retrieving csrf cookie and middleware token
-    
+    session_cookie_login, csrf_cookie_login = cookie_jar(received_message_login_page)
+    parser = FakebookHTMLParser()
+    parser.feed(received_message_login_page.decode())
+    csrfmiddleware_token = parser.csrfmiddleware_token
 
     # creating login body for user
-    
-    
+    login_content = ['username=' + username, 'password=' + password,
+                     'csrfmiddlewaretoken=' + csrfmiddleware_token, 
+                     'next=%2Ffakebook%2F']
+    login_content = "&".join(login_content)
+
+    login_headers = ["POST " + login_path + " " + "HTTP/1.1", host, 
+                     'Cookie: csrftoken=' + csrf_cookie_login,
+                     'Content-Type: application/x-www-form-urlencoded',
+                     'Content-Length: ' + str(len(login_content))]
+    login_body = CRLF.join(login_headers) + CRLF + CRLF + login_content + CRLF + CRLF
+
     # login user
-   
+    wrapped_socket.send(login_body.encode('utf-8'))
+    received_message_login_page = receive_msg(wrapped_socket)
 
     # store new cookies
-   
+    session_cookie_login, csrf_cookie_login = cookie_jar(received_message_login_page)
 
-    # send request to go to my fakebook page
-    
+    # send request to go to my fakebook page 
+    send_get_request(fakebook, wrapped_socket, host, csrf_cookie_login, 
+                     session_cookie_login)
+    received_message_fakebook_page = receive_msg(wrapped_socket)
+    print(received_message_fakebook_page.decode())
 
     # start your crawler
 
 
     # close the socket - program end
-
-    
-    
-
 
 if __name__ == "__main__":
     main()
