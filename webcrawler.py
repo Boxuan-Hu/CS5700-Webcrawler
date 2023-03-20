@@ -96,12 +96,25 @@ def receive_msg(sock):
     
     
     """
+
+    message = sock.recv(4096)
+    content_length = getContent_length(message)
+
+    while len(message) < content_length:
+        message += sock.recv(1024)
+    return message
     
 def getContent_length(msg):
 
     """Extracts the content length of the URL"""    
-    
-
+    headers = msg.decode().split(CRLF)
+    content_length = 0
+    for header in headers:
+        if header.startswith("Content-Length"):
+            content_length = header.split(":")[1].strip()
+            break
+    print("content_length: " + content_length)
+    return int(content_length)
 
 # this function will help you to extract cookies from the response message
 def cookie_jar(msg):
@@ -145,6 +158,7 @@ def main():
 
     # Parse the username and password from the command line
     username, password = parse_cmd_line()
+    print("Username: " + username, "Password: " + password)
 
     # Create TLS wrapped socket
     wrapped_socket = create_socket()
@@ -154,6 +168,7 @@ def main():
 
     # check the received message
     received_message = receive_msg(wrapped_socket)
+    print(received_message.decode())
 
     # store session cookie
     
