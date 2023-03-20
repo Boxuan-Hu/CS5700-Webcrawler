@@ -7,6 +7,9 @@ import ssl
 from collections import deque
 from html.parser import HTMLParser
 
+# global variables
+CRLF = "\r\n"
+
 # use a dara structure to track unique URLs already crawled
 
 # use a dara structure to track URLs to be crawled
@@ -75,6 +78,15 @@ def send_get_request(path, sock, host, cookie1=None, cookie2=None):
 
     """
 
+    headers = ["GET " + path + " " + "HTTP/1.1", host]      
+    cookie_header = ""         
+    if (cookie1 != None):
+        cookie_header += 'Cookie: csrftoken=' + cookie1
+        if (cookie1 != None):
+            cookie_header += "; " + 'sessionid=' + cookie1        
+    request = CRLF.join(headers) + CRLF + CRLF
+    sock.send(request.encode())
+
 # this function will help you to receive message from the server for any request sent by the client
 
 def receive_msg(sock):
@@ -131,20 +143,17 @@ def main():
     fakebook = "/fakebook/"
     login_path = "/accounts/login/?next=/fakebook/"
 
-    """  
-    You can follow the following setps
-
     # Parse the username and password from the command line
-    
+    username, password = parse_cmd_line()
 
     # Create TLS wrapped socket
-    
+    wrapped_socket = create_socket()
 
     # get the root page
-    
+    send_get_request(root_path, wrapped_socket, host)
 
     # check the received message
-   
+    received_message = receive_msg(wrapped_socket)
 
     # store session cookie
     
@@ -174,8 +183,6 @@ def main():
 
 
     # close the socket - program end
-    
-    """
 
     
     
