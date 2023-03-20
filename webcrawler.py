@@ -99,7 +99,6 @@ def send_get_request(path, sock, host, cookie1=None, cookie2=None):
             cookie_header += "; " + 'sessionid=' + cookie2
         headers.append(cookie_header)        
     request = CRLF.join(headers) + CRLF + CRLF
-    print("request: " + request)
     sock.send(request.encode())
 
 # this function will help you to receive message from the server for any request sent by the client
@@ -128,7 +127,6 @@ def getContent_length(msg):
         if header.startswith("Content-Length"):
             content_length = header.split(":")[1].strip()
             break
-    print("content_length: " + content_length)
     return int(content_length)
 
 # this function will help you to extract cookies from the response message
@@ -158,10 +156,18 @@ def cookie_jar(msg):
     
 
 #this function will help you to send the  request to login
-def login_user(sock, path, host, body_len, body, cookie1, cookie2):
-   """
-   create a  request and send it to login to the fakebook site
-   """
+def login_user(sock, path, host, body_len, body, cookie1, cookie2=None):
+    """
+    create a  request and send it to login to the fakebook site
+    """
+    login_headers = ["POST " + path + " " + "HTTP/1.1", host, 
+                    'Cookie: csrftoken=' + cookie1,
+                    'Content-Type: application/x-www-form-urlencoded',
+                    'Content-Length: ' + str(body_len)]    
+    login_body = CRLF.join(login_headers) + CRLF + CRLF + body + CRLF + CRLF
+    sock.send(login_body.encode())
+    return receive_msg(sock)
+       
 
 
 def start_crawling(msg, sock, host, cookie3, cookie4):
@@ -212,15 +218,9 @@ def main():
                      'next=%2Ffakebook%2F']
     login_content = "&".join(login_content)
 
-    login_headers = ["POST " + login_path + " " + "HTTP/1.1", host, 
-                     'Cookie: csrftoken=' + csrf_cookie_login,
-                     'Content-Type: application/x-www-form-urlencoded',
-                     'Content-Length: ' + str(len(login_content))]
-    login_body = CRLF.join(login_headers) + CRLF + CRLF + login_content + CRLF + CRLF
-
     # login user
-    wrapped_socket.send(login_body.encode('utf-8'))
-    received_message_login_page = receive_msg(wrapped_socket)
+    received_message_login_page = login_user(wrapped_socket, login_path, host, len(login_content), 
+                                             login_content, csrf_cookie_login)
 
     # store new cookies
     session_cookie_login, csrf_cookie_login = cookie_jar(received_message_login_page)
@@ -229,7 +229,7 @@ def main():
     send_get_request(fakebook, wrapped_socket, host, csrf_cookie_login, 
                      session_cookie_login)
     received_message_fakebook_page = receive_msg(wrapped_socket)
-    print(received_message_fakebook_page.decode())
+    print("Fakebook page: ", received_message_fakebook_page.decode())
 
     # start your crawler
 
