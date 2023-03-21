@@ -10,14 +10,14 @@ from html.parser import HTMLParser
 # global variables
 CRLF = "\r\n"
 
-
 # use a dara structure to track unique URLs already crawled
-
+crawled_page = set()
 # use a dara structure to track URLs to be crawled
-
+not_crawled_page = deque()
 # use a dara structure to store unique secret flags found in the pages
-
+secret_flags = set()
 # use a dara structure to hold the middlewaretoken
+token = list()
 
 
 class FakebookHTMLParser(HTMLParser):
@@ -45,6 +45,8 @@ class FakebookHTMLParser(HTMLParser):
                         for attr in attrs:
                             if attr[0] == "value":
                                 self.csrfmiddleware_token = attr[1]
+
+
 
 
 # Parses the command line arguments for username and password. Throws error for invalid info
@@ -116,9 +118,17 @@ def receive_msg(sock):
     return message
 
 
+def get_header(msg):
+    """
+    get header
+    """
+    headers = msg.decode().split(CRLF)
+    return headers
+
+
 def getContent_length(msg):
     """Extracts the content length of the URL"""
-    headers = msg.decode().split(CRLF)
+    headers = get_header(msg)
     content_length = 0
     for header in headers:
         if header.startswith("Content-Length"):
@@ -165,6 +175,30 @@ def login_user(sock, path, host, body_len, body, cookie1, cookie2=None):
     return receive_msg(sock)
 
 
+def get_res(msg):
+    """
+    covert response code to integer
+    """
+    res_code = 500
+    if len(msg) > 0:
+        res_code = int(msg.splitlines()[0].split()[1])
+    return res_code
+
+
+def redirect_page(msg):
+    """
+    get redirected page
+    """
+    headers = get_header(msg)
+    redirected_page = ""
+    for header in headers:
+        if header.startswith("Location: "):
+            redirected_page = header.split()[1]
+    return redirected_page
+
+
+
+
 def start_crawling(msg, sock, host, cookie3, cookie4):
     """
     Implements the basic web crawler for this program.
@@ -172,6 +206,41 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
     secret flags are found for the user.
     Also accounts for and appropriately handles different errors received when parsing through pages.
     """
+    parser = FakebookHTMLParser()
+    #
+    parser.feed(msg.decode())
+
+    while len(not_crawled_page) != 0:
+        temp = not_crawled_page.pop()
+
+        if temp not in crawled_page:
+            send_get_request(temp, sock, host, cookie1=cookie3, cookie2=cookie4)
+            msg = receive_msg(sock)
+            res = get_res(msg)
+
+            # response ok 200 - pass
+            if res in range(200, 299 + 1):
+                pass
+
+            # 300 - redirect page
+            elif res in range(300, 399 + 1):
+                redirected_page = redirect_page(msg)
+                if redirected_page != "":
+                    not_crawled_page.append(redirected_page)
+            # 400
+            elif res in range(400, 499 + 1):
+                crawled_page.add(temp)
+                continue
+
+            # 500
+            elif res in range(500, 599 + 1):
+                not_crawled_page.append(temp)
+                continue
+
+            parser.feed(msg.decode())
+            crawled_page.add(temp)
+            if len(secret_flags) == 5:
+                break
 
 
 def main():
@@ -228,8 +297,10 @@ def main():
     print("Fakebook page: ", received_message_fakebook_page.decode())
 
     # start your crawler
+    start_crawling(received_message_fakebook_page, wrapped_socket, host, csrf_cookie_login, session_cookie_login)
 
     # close the socket - program end
+    wrapped_socket.close()
 
 
 if __name__ == "__main__":
