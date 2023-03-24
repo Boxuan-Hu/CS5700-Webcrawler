@@ -1,4 +1,4 @@
-# !/usr/bin/env python3
+#!/usr/bin/env python3
 
 import cgi
 import socket
@@ -45,8 +45,6 @@ class FakebookHTMLParser(HTMLParser):
                         for attr in attrs:
                             if attr[0] == "value":
                                 self.csrfmiddleware_token = attr[1]
-
-
 
 
 # Parses the command line arguments for username and password. Throws error for invalid info
@@ -118,17 +116,9 @@ def receive_msg(sock):
     return message
 
 
-def get_header(msg):
-    """
-    get header
-    """
-    headers = msg.decode().split(CRLF)
-    return headers
-
-
 def getContent_length(msg):
     """Extracts the content length of the URL"""
-    headers = get_header(msg)
+    headers = msg.decode().split(CRLF)
     content_length = 0
     for header in headers:
         if header.startswith("Content-Length"):
@@ -175,28 +165,17 @@ def login_user(sock, path, host, body_len, body, cookie1, cookie2=None):
     return receive_msg(sock)
 
 
-def get_res(msg):
-    """
-    covert response code to integer
-    """
-    res_code = 500
-    if len(msg) > 0:
-        res_code = int(msg.splitlines()[0].split()[1])
-    return res_code
-
-
 def redirect_page(msg):
     """
     get redirected page
     """
-    headers = get_header(msg)
+    msg = msg.partition(CRLF+CRLF)
+    headers = msg[0]
     redirected_page = ""
     for header in headers:
         if header.startswith("Location: "):
             redirected_page = header.split()[1]
     return redirected_page
-
-
 
 
 def start_crawling(msg, sock, host, cookie3, cookie4):
@@ -297,10 +276,8 @@ def main():
     print("Fakebook page: ", received_message_fakebook_page.decode())
 
     # start your crawler
-    start_crawling(received_message_fakebook_page, wrapped_socket, host, csrf_cookie_login, session_cookie_login)
 
     # close the socket - program end
-    wrapped_socket.close()
 
 
 if __name__ == "__main__":
