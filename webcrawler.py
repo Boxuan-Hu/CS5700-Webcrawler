@@ -33,7 +33,9 @@ class FakebookHTMLParser(HTMLParser):
 
     def __init__(self):
         super().__init__()
-        self.csrfmiddleware_token = None
+        self.is_h2 = False
+        self.acc_data = ''
+        # self.csrfmiddleware_token = None
 
         # ?
 
@@ -44,11 +46,26 @@ class FakebookHTMLParser(HTMLParser):
                     if attr[1] == "csrfmiddlewaretoken":
                         for attr in attrs:
                             if attr[0] == "value":
-                                self.csrfmiddleware_token = attr[1]
+                                # add token to token list
+                                token.append(attr[1])
+
+    def handle_endtag(self, tag):
+        if tag == 'h2':  # after finding end tag, set found flag to false
+            self.is_h2 = False
+            if self.acc_data != '':  # if data has content then parse it to print and get the secret flag
+                flag = self.acc_data.split()
+                f = flag[1]
+                if f not in secret_flags:
+                    secret_flags.add(f)  # add secret flag to the set of flags
+                    print(f)
+            self.acc_data = ''  # set data to empty string for next secret flag
+
+    def handle_data(self, data):
+        if self.is_h2:
+            self.acc_data += data
 
 
 # Parses the command line arguments for username and password. Throws error for invalid info
-
 def parse_cmd_line():
     username = ""
     password = ""
@@ -105,20 +122,22 @@ def receive_msg(sock):
 
     Receive the message in a loop based on the content length given in the header
 
-
     """
-
-    message = sock.recv(4096)
-    content_length = getContent_length(message)
-
-    while len(message) < content_length:
-        message += sock.recv(1024)
-    return message
+    msg = sock.recv(4096).decode()
+    length = getContent_length(msg)
+    while True:
+        if length == "0":
+            break
+        elif not msg.endswith('</html>\n'):
+            msg += sock.recv(4096).decode()
+        else:
+            break
+    return msg
 
 
 def getContent_length(msg):
     """Extracts the content length of the URL"""
-    headers = msg.decode().split(CRLF)
+    headers = msg.split(CRLF)
     content_length = 0
     for header in headers:
         if header.startswith("Content-Length"):
@@ -135,7 +154,6 @@ def cookie_jar(msg):
     return cookies
 
     """
-    msg = msg.decode()
     header_end = msg.rfind(CRLF + CRLF)
     headers = msg[:header_end].split(CRLF)
 
@@ -169,13 +187,23 @@ def redirect_page(msg):
     """
     get redirected page
     """
-    msg = msg.partition(CRLF+CRLF)
+    msg = msg.partition(CRLF + CRLF)
     headers = msg[0]
     redirected_page = ""
     for header in headers:
         if header.startswith("Location: "):
             redirected_page = header.split()[1]
     return redirected_page
+
+
+def get_res(msg):
+    """
+    covert response code to integer
+    """
+    res_code = 500
+    if len(msg) > 0:
+        res_code = int(msg.splitlines()[0].split()[1])
+    return res_code
 
 
 def start_crawling(msg, sock, host, cookie3, cookie4):
@@ -187,7 +215,7 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
     """
     parser = FakebookHTMLParser()
     #
-    parser.feed(msg.decode())
+    parser.feed(msg)
 
     while len(not_crawled_page) != 0:
         temp = not_crawled_page.pop()
@@ -216,7 +244,7 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
                 not_crawled_page.append(temp)
                 continue
 
-            parser.feed(msg.decode())
+            parser.feed(msg)
             crawled_page.add(temp)
             if len(secret_flags) == 5:
                 break
@@ -253,8 +281,9 @@ def main():
     # retrieving csrf cookie and middleware token
     session_cookie_login, csrf_cookie_login = cookie_jar(received_message_login_page)
     parser = FakebookHTMLParser()
-    parser.feed(received_message_login_page.decode())
-    csrfmiddleware_token = parser.csrfmiddleware_token
+    parser.feed(received_message_login_page)
+    # using token from token list
+    csrfmiddleware_token = token[0]
 
     # creating login body for user
     login_content = ['username=' + username, 'password=' + password,
@@ -273,11 +302,12 @@ def main():
     send_get_request(fakebook, wrapped_socket, host, csrf_cookie_login,
                      session_cookie_login)
     received_message_fakebook_page = receive_msg(wrapped_socket)
-    print("Fakebook page: ", received_message_fakebook_page.decode())
+    # print("Fakebook page: ", received_message_fakebook_page)
 
     # start your crawler
-
+    start_crawling(received_message_fakebook_page, wrapped_socket, host, csrf_cookie_login, session_cookie_login)
     # close the socket - program end
+    wrapped_socket.close()
 
 
 if __name__ == "__main__":
