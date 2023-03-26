@@ -34,35 +34,44 @@ class FakebookHTMLParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.is_h2 = False
-        self.acc_data = ''
-        # self.csrfmiddleware_token = None
-
+        self.h2_data = ''
+        self.csrfmiddleware_token = False
         # ?
 
     def handle_starttag(self, tag, attrs):
-        if tag == "input":
-            for attr in attrs:
-                if attr[0] == "name":
-                    if attr[1] == "csrfmiddlewaretoken":
-                        for attr in attrs:
-                            if attr[0] == "value":
-                                # add token to token list
-                                token.append(attr[1])
+        if tag == 'a':  # only looking at the links tags
+            for attrs in attrs:
+                link = attrs[1]
+                if link.startswith("/fakebook"):
+                    not_crawled_page.append(link)  # add to the queue of URLs to be crawled
+
+        if tag == "h2":  # only interested in getting secret flags under h2
+            for attributes in attrs:
+                if "secret_flag" in attributes:  # if secret flags under the attributes then set flag to found-- true
+                    self.is_h2 = True
+
+        if tag == 'input':
+            for attrs in attrs:
+                if self.csrfmiddleware_token:  # this line contains the csfrmiddlewaretoken
+                    token.append(attrs[1])
+                    self.csrfmiddleware_token = False
+                if attrs[1] == "csrfmiddlewaretoken":  # the token will follow this attrs so we set to true
+                    self.csrfmiddleware_token = True
 
     def handle_endtag(self, tag):
         if tag == 'h2':  # after finding end tag, set found flag to false
             self.is_h2 = False
-            if self.acc_data != '':  # if data has content then parse it to print and get the secret flag
-                flag = self.acc_data.split()
+            if self.h2_data != '':  # if data has content then parse it to print and get the secret flag
+                flag = self.h2_data.split()
                 f = flag[1]
                 if f not in secret_flags:
                     secret_flags.add(f)  # add secret flag to the set of flags
                     print(f)
-            self.acc_data = ''  # set data to empty string for next secret flag
+            self.h2_data = ''  # set data to empty string for next secret flag
 
     def handle_data(self, data):
         if self.is_h2:
-            self.acc_data += data
+            self.h2_data += data
 
 
 # Parses the command line arguments for username and password. Throws error for invalid info
@@ -137,13 +146,11 @@ def receive_msg(sock):
 
 def getContent_length(msg):
     """Extracts the content length of the URL"""
-    headers = msg.split(CRLF)
-    content_length = 0
-    for header in headers:
-        if header.startswith("Content-Length"):
-            content_length = header.split(":")[1].strip()
-            break
-    return int(content_length)
+    if "Content-Length:" in msg:
+        m = msg.split()
+        idx = m.index("Content-Length:")
+        length = m[idx + 1]
+        return length
 
 
 # this function will help you to extract cookies from the response message
@@ -190,7 +197,7 @@ def redirect_page(msg):
     msg = msg.partition(CRLF + CRLF)
     headers = msg[0]
     redirected_page = ""
-    for header in headers:
+    for header in headers.split(CRLF):
         if header.startswith("Location: "):
             redirected_page = header.split()[1]
     return redirected_page
@@ -214,11 +221,10 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
     Also accounts for and appropriately handles different errors received when parsing through pages.
     """
     parser = FakebookHTMLParser()
-    #
     parser.feed(msg)
 
     while len(not_crawled_page) != 0:
-        temp = not_crawled_page.pop()
+        temp = not_crawled_page.popleft()
 
         if temp not in crawled_page:
             send_get_request(temp, sock, host, cookie1=cookie3, cookie2=cookie4)
@@ -226,16 +232,16 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
             res = get_res(msg)
 
             # response ok 200 - pass
-            if res in range(200, 299 + 1):
+            if res in range(200, 299):
                 pass
 
             # 300 - redirect page
-            elif res in range(300, 399 + 1):
+            elif res in range(300, 399):
                 redirected_page = redirect_page(msg)
                 if redirected_page != "":
                     not_crawled_page.append(redirected_page)
             # 400
-            elif res in range(400, 499 + 1):
+            elif res in range(400, 499):
                 crawled_page.add(temp)
                 continue
 
@@ -250,6 +256,7 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
                 break
 
 
+
 def main():
     host = "Host: project2.5700.network"
     root_path = "/"
@@ -258,7 +265,7 @@ def main():
 
     # Parse the username and password from the command line
     username, password = parse_cmd_line()
-    print("Username: " + username, "Password: " + password)
+    # print("Username: " + username, "Password: " + password)
 
     # Create TLS wrapped socket
     wrapped_socket = create_socket()
@@ -306,6 +313,7 @@ def main():
 
     # start your crawler
     start_crawling(received_message_fakebook_page, wrapped_socket, host, csrf_cookie_login, session_cookie_login)
+
     # close the socket - program end
     wrapped_socket.close()
 
