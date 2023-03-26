@@ -32,7 +32,7 @@ class FakebookHTMLParser(HTMLParser):
     """
 
     def __init__(self):
-        super().__init__()
+        super().__init__()    
         self.is_h2 = False
         self.h2_data = ''
         self.csrfmiddleware_token = False
@@ -72,8 +72,7 @@ class FakebookHTMLParser(HTMLParser):
     def handle_data(self, data):
         if self.is_h2:
             self.h2_data += data
-
-
+            
 # Parses the command line arguments for username and password. Throws error for invalid info
 def parse_cmd_line():
     username = ""
@@ -142,8 +141,8 @@ def receive_msg(sock):
         else:
             break
     return msg
-
-
+    
+    
 def getContent_length(msg):
     """Extracts the content length of the URL"""
     if "Content-Length:" in msg:
@@ -211,7 +210,7 @@ def get_res(msg):
     if len(msg) > 0:
         res_code = int(msg.splitlines()[0].split()[1])
     return res_code
-
+    
 
 def start_crawling(msg, sock, host, cookie3, cookie4):
     """
@@ -221,10 +220,12 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
     Also accounts for and appropriately handles different errors received when parsing through pages.
     """
     parser = FakebookHTMLParser()
+
     parser.feed(msg)
 
     while len(not_crawled_page) != 0:
         temp = not_crawled_page.popleft()
+
 
         if temp not in crawled_page:
             send_get_request(temp, sock, host, cookie1=cookie3, cookie2=cookie4)
@@ -232,6 +233,7 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
             res = get_res(msg)
 
             # response ok 200 - pass
+
             if res in range(200, 299):
                 pass
 
@@ -240,8 +242,10 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
                 redirected_page = redirect_page(msg)
                 if redirected_page != "":
                     not_crawled_page.append(redirected_page)
+                    
             # 400
             elif res in range(400, 499):
+
                 crawled_page.add(temp)
                 continue
 
@@ -254,7 +258,6 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
             crawled_page.add(temp)
             if len(secret_flags) == 5:
                 break
-
 
 
 def main():
@@ -316,6 +319,7 @@ def main():
 
     # close the socket - program end
     wrapped_socket.close()
+
 
 
 if __name__ == "__main__":
