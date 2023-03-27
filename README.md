@@ -1,4 +1,5 @@
 Crawler project README.md
+
 Xinchang Meng: Finished Start crawling function
 redirect_page(msg) function that takes in a message received from the web server and parses it to extract the redirected page's URL if the response status code is a 3xx (redirect) status code. 
 The function returns the URL of the redirected page.
