@@ -60,11 +60,10 @@ class FakebookHTMLParser(HTMLParser):
         if tag == 'h2':  
             self.is_h2 = False
             if self.h2_data != '':  
-                flag = self.h2_data.split()
-                f = flag[1]
-                if f not in secret_flags:
-                    secret_flags.add(f)  
-                    print(f)
+                flag = self.h2_data.split()[1]
+                if flag not in secret_flags:
+                    secret_flags.add(flag)  
+                    print(flag)
             self.h2_data = ''  
 
     def handle_data(self, data):
