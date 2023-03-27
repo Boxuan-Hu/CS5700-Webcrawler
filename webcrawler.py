@@ -136,16 +136,17 @@ def receive_msg(sock):
             msg += sock.recv(4096).decode()
         else:
             break
-    return msg
-    
-    
+    return msg  
+
 def getContent_length(msg):
     """Extracts the content length of the URL"""
-    if "Content-Length:" in msg:
-        m = msg.split()
-        idx = m.index("Content-Length:")
-        length = m[idx + 1]
-        return length
+    headers = msg.split(CRLF)
+    content_length = "0"
+    for header in headers:
+        if header.startswith("Content-Length"):
+            content_length = header.split(":")[1].strip()
+            break
+    return content_length
 
 
 # this function will help you to extract cookies from the response message
@@ -227,7 +228,6 @@ def start_crawling(msg, sock, host, cookie3, cookie4):
             res = get_res(msg)
 
             # response ok 200 - pass
-
             if res in range(200, 299):
                 pass
 
@@ -262,7 +262,6 @@ def main():
 
     # Parse the username and password from the command line
     username, password = parse_cmd_line()
-    # print("Username: " + username, "Password: " + password)
 
     # Create TLS wrapped socket
     wrapped_socket = create_socket()
@@ -306,7 +305,6 @@ def main():
     send_get_request(fakebook, wrapped_socket, host, csrf_cookie_login,
                      session_cookie_login)
     received_message_fakebook_page = receive_msg(wrapped_socket)
-    # print("Fakebook page: ", received_message_fakebook_page)
 
     # start your crawler
     start_crawling(received_message_fakebook_page, wrapped_socket, host, csrf_cookie_login, session_cookie_login)
