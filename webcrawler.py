@@ -50,10 +50,11 @@ class FakebookHTMLParser(HTMLParser):
 
             case 'input':
                 for attr in attrs:
+                    t = attr[1]
                     if self.csrfmiddleware_token:  
-                        token.append(attr[1])
+                        token.append(t)
                         self.csrfmiddleware_token = False
-                    if attr[1] == "csrfmiddlewaretoken":  
+                    if t == "csrfmiddlewaretoken":  
                         self.csrfmiddleware_token = True
 
     def handle_endtag(self, tag):
